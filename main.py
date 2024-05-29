@@ -15,7 +15,7 @@ bot_token = os.getenv('BOT_TOKEN')
 admin_user_id = os.getenv('ADMIN_USER_ID')
 admin_username = os.getenv('ADMIN_USERNAME')
 phone_number = os.getenv('PHONE_NUMBER')
-client = TelegramClient('bot_session', int(api_id), api_hash).start(bot_token=bot_token)
+client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 
 columns = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
            "is_available", "region", "product_type", "car_model", "car_brand", "inventory"]
@@ -228,7 +228,7 @@ async def handle_csv(event):
         await event.respond(f"Error handling CSV file: {str(e)}")
 
 
-@client.on(events.NewMessage(pattern="./backup"))
+@client.on(events.NewMessage(pattern="./backup$"))
 async def backup_handler(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
@@ -249,8 +249,7 @@ async def help_handler(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
         if not permissions.is_admin:
-            await event.respond("Sorry, only administrators can access this event.")
-            return 0
+            return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
         await event.respond(f"Error handling event: {str(e)}")
 
@@ -259,10 +258,10 @@ async def help_handler(event):
         "All commands need to be exact!\n"
         "/update_product_value <product_id> <column> <value>  -> to update a product value of specific column \n"
         "/change_availability <product_id> <new_availability> ->to change availability of specific product fast! \n"
+        "/backup -> send you a backup csv file from your database.\n"
         "/add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> -> to add single product \n"
         "with uploading csv file you can add products to it with order <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>\n"
         "in case of adding be careful about data order and type!\n"
-        "/backup -> send you a backup csv file from your database"
     )
 
 
