@@ -100,18 +100,13 @@ async def update_product(event):
         await event.respond(f"Error handling event: {str(e)}")
 
     try:
-        if event.sender_id == admin_user_id or event.sender_id == phone_number or event.sender_id == admin_username:
-            try:
-                _, product_id, column, value = event.text.split()
-                cursor.execute(f'UPDATE products SET {column} = ? WHERE id = ?', (value, int(product_id)))
-                conn.commit()
-                await event.respond(f"Product {product_id} updated successfully.")
-            except ValueError:
-                await event.respond("Invalid input. Use /update_product <product_id> <column> <value>")
-        else:
-            await event.respond("You are not authorized to update products.")
-    except Exception as e:
-        await event.respond(f"Error updating : {str(e)}")
+        _, product_id, column, value = event.text.split()
+        cursor.execute(f'UPDATE products SET {column} = ? WHERE id = ?', (value, int(product_id)))
+        conn.commit()
+        await event.respond(f"Product {product_id} updated successfully.")
+    except ValueError:
+        await event.respond("Invalid input. Use /update_product <product_id> <column> <value>")
+
 
 
 @client.on(events.NewMessage(pattern="./change_availability"))
@@ -126,8 +121,8 @@ async def change_availability(event):
 
     try:
         message_text = event.text.lower()
-        if "/changeavailability" not in message_text:
-            return
+        if message_text.startswith("/change_availability"):
+            return  await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
         try:
             _, product_id, new_availability = message_text.split()
         except ValueError:
@@ -136,7 +131,6 @@ async def change_availability(event):
         product_id = int(product_id)
         new_availability = new_availability.lower() == "true"
 
-        # Update the 'is_available' field in the 'products' table
         cursor.execute("UPDATE products SET is_available = ? WHERE id = ?", (new_availability, product_id))
         conn.commit()
 
