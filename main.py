@@ -4,6 +4,10 @@ import os
 import pandas as pd
 from telethon.sync import TelegramClient, events
 
+#############
+# base data #
+#############
+
 # Remember to use your own values from my.telegram.org!
 api_id = os.getenv('API_ID')
 api_hash = os.getenv('API_HASH')
@@ -15,6 +19,13 @@ client = TelegramClient('bot_session', int(api_id), api_hash).start(bot_token=bo
 
 columns = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
            "is_available", "region", "product_type", "car_model", "car_brand", "inventory"]
+
+
+def get_bot_chat_id():
+    with TelegramClient('bot_session', api_id, api_hash) as bot_client:
+        updates = bot_client.get_updates()
+        chat_id = updates[0].message.chat.id
+    return chat_id
 
 
 def create_or_connect_database(filename='products.db', expected_columns=None):
@@ -173,8 +184,9 @@ async def add_product(event):
                           (product_name, product_name_fa, part_number, brand, region,
                            product_type, car_brand, car_model, price_usd, inventory, is_available)
                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
-        message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8], int(message[9]),
-        int(message[10]), int(message[11])))
+            message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8],
+            int(message[9]),
+            int(message[10]), int(message[11])))
         conn.commit()
         return await event.respond(f"add successfully")
     except:
@@ -227,7 +239,7 @@ async def backup_handler(event):
 
     df = pd.read_sql_query("SELECT * FROM product", conn)
     df.to_csv('data.csv', index=False)
-    await event.send_file('data.csv')
+    await event.send_file(get_bot_chat_id(), 'data.csv')
     os.remove('data.csv')
     return event.respond("Your backup file is not On server")
 
@@ -251,7 +263,7 @@ async def help_handler(event):
         "with uploading csv file you can add products to it with order <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>\n"
         "in case of adding be careful about data order and type!\n"
         "/backup -> send you a backup csv file from your database"
-        )
+    )
 
 
 if __name__ == '__main__':
