@@ -1,6 +1,7 @@
 import csv
 import sqlite3
 import os
+import pandas as pd
 from telethon.sync import TelegramClient, events
 
 # Remember to use your own values from my.telegram.org!
@@ -185,8 +186,7 @@ async def handle_csv(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
         if not permissions.is_admin:
-            await event.respond("Sorry, only administrators can access this event.")
-            return 0
+            return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
         await event.respond(f"Error handling event: {str(e)}")
 
@@ -216,6 +216,22 @@ async def handle_csv(event):
         await event.respond(f"Error handling CSV file: {str(e)}")
 
 
+@client.on(events.NewMessage(pattern="./backup"))
+async def backup_handler(event):
+    try:
+        permissions = await client.get_permissions(event.sender_id)
+        if not permissions.is_admin:
+            return await event.respond("Sorry, only administrators can access this event.")
+    except Exception as e:
+        await event.respond(f"Error handling event: {str(e)}")
+
+    df = pd.read_sql_query("SELECT * FROM product", conn)
+    df.to_csv('data.csv', index=False)
+    await event.send_file('data.csv')
+    os.remove('data.csv')
+    return event.respond("Your backup file is not On server")
+
+
 @client.on(events.NewMessage(pattern='./help'))
 async def help_handler(event):
     try:
@@ -234,6 +250,7 @@ async def help_handler(event):
         "/add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> -> to add single product \n"
         "with uploading csv file you can add products to it with order <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>\n"
         "in case of adding be careful about data order and type!\n"
+        "/backup -> send you a backup csv file from your database"
         )
 
 
