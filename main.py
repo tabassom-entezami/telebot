@@ -93,9 +93,7 @@ async def start_handler(event):
 async def update_product(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
-        if permissions.is_admin:
-            await event.respond("Welcome, administrator!")
-        else:
+        if not permissions.is_admin:
             await event.respond("Sorry, only administrators can access this event.")
             return 0
     except Exception as e:
@@ -120,9 +118,7 @@ async def update_product(event):
 async def change_availability(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
-        if permissions.is_admin:
-            await event.respond("Welcome, administrator!")
-        else:
+        if not permissions.is_admin:
             await event.respond("Sorry, only administrators can access this event.")
             return 0
     except Exception as e:
@@ -153,9 +149,7 @@ async def change_availability(event):
 async def add_product(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
-        if permissions.is_admin:
-            await event.respond("Welcome, administrator!")
-        else:
+        if not permissions.is_admin:
             await event.respond("Sorry, only administrators can access this event.")
             return 0
     except Exception as e:
@@ -189,9 +183,7 @@ async def add_product(event):
 async def handle_csv(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
-        if permissions.is_admin:
-            await event.respond("Welcome, administrator!")
-        else:
+        if not permissions.is_admin:
             await event.respond("Sorry, only administrators can access this event.")
             return 0
     except Exception as e:
@@ -206,15 +198,18 @@ async def handle_csv(event):
 
         with open(file_path, "r") as csvfile:
             csv_reader = csv.reader(csvfile)
-            for row in csv_reader:
+            for message in csv_reader:
                 try:
-                    name, price, code, available = row[0], row[1], row[2], row[3]
-                    cursor.execute(
-                        f"INSERT INTO products (product_name, product_code, price, is_available) VALUES (?, ?, ?, ?)",
-                        (name, code, price, available))
+                    cursor.execute('''INSERT INTO products_new
+                                      (product_name, product_name_fa, part_number, brand, region,
+                                       product_type, car_brand, car_model, price_usd, inventory, is_available)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+                    message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8],
+                    int(message[9]), int(message[10]), int(message[11])))
                     conn.commit()
+                    await event.respond(f"add successfully")
                 except:
-                    await event.respond(f"{row[0]} could not add")
+                    await event.respond(f"{message} could not add")
         await event.respond("CSV file received and processed successfully!")
     except Exception as e:
         await event.respond(f"Error handling CSV file: {str(e)}")
