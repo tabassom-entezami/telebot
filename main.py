@@ -16,16 +16,27 @@ admin_user_id = os.getenv('ADMIN_USER_ID')
 admin_username = os.getenv('ADMIN_USERNAME')
 phone_number = os.getenv('PHONE_NUMBER')
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
+user_client = TelegramClient('bot_session', api_id, api_hash)
 
 columns = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
            "is_available", "region", "product_type", "car_model", "car_brand", "inventory"]
 
+groups={}
 
 def get_bot_chat_id():
     with TelegramClient('bot_session', api_id, api_hash) as bot_client:
         updates = bot_client.get_updates()
         chat_id = updates[0].message.chat.id
     return chat_id
+
+@user_client.on(events.UserUpdate())
+async def get_groups():
+    all_chats = await client.get_dialogs()
+    for chat in all_chats:
+        chat.is_group = True
+        if not chat.is_channel:
+            groups[chat.chat_id] = chat
+            print(f"Chat ID: {chat.id}, Title: {chat.title}")
 
 
 def create_or_connect_database(filename='products.db', expected_columns=None):
@@ -96,9 +107,10 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 #             await event.respond(f"Product '{product_query}' not found.")
 
 
-########
-# by bot#
-########
+##########
+# by bot #
+#  ADMIN #
+##########
 
 @client.on(events.NewMessage(pattern='./start'))
 async def start_handler(event):
@@ -269,4 +281,6 @@ if __name__ == '__main__':
     conn = create_or_connect_database('product.db', columns)
     cursor = conn.cursor()
     client.start()
+    user_client.start(os.getenv(phone_number))
+    user_client.run_until_disconnected()
     client.run_until_disconnected()
