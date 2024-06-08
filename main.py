@@ -121,7 +121,7 @@ async def replay_handler(event):
 
 @client.on(events.NewMessage(pattern='^/start$'))
 async def start_handler(event):
-    await event.respond("Welcome! How can i help you?")
+    return await event.respond("Welcome! How can i help you?")
 
 
 @client.on(events.NewMessage(pattern='^/update_product_value'))
@@ -130,7 +130,7 @@ async def update_product(event):
         if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        await event.respond(f"Error handling event: {str(e)}")
+        return await event.respond(f"Error handling event: {str(e)}")
 
     try:
         _, product_id, column, value = event.text.split()
@@ -140,9 +140,9 @@ async def update_product(event):
 
         cursor.execute(f'UPDATE products SET {column} = ? WHERE id = ?', (value, int(product_id)))
         conn.commit()
-        await event.respond(f"Product {product_id} updated successfully.")
+        return await event.respond(f"Product {product_id} updated successfully.")
     except ValueError:
-        await event.respond("Invalid input. Use /update_product_value <product_id> <column> <value>")
+        return await event.respond("Invalid input. Use /update_product_value <product_id> <column> <value>")
 
 
 @client.on(events.NewMessage(pattern="^/change_availability"))
@@ -151,16 +151,16 @@ async def change_availability(event):
         if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        await event.respond(f"Error handling event: {str(e)}")
+        return await event.respond(f"Error handling event: {str(e)}")
 
     try:
         message_text = event.text.lower()
         if message_text.startswith("/change_availability"):
-            await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
+            return await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
         try:
             _, product_id, new_availability = message_text.split()
         except ValueError:
-            await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
+            return await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
 
         product_id = int(product_id)
         new_availability = new_availability.lower() == "true"
@@ -168,9 +168,9 @@ async def change_availability(event):
         cursor.execute("UPDATE products SET is_available = ? WHERE id = ?", (new_availability, product_id))
         conn.commit()
 
-        await event.respond("Availability updated successfully!")
+        return await event.respond("Availability updated successfully!")
     except Exception as e:
-        await event.respond(f"Error updating availability: {str(e)}")
+        return await event.respond(f"Error updating availability: {str(e)}")
 
 
 @client.on(events.NewMessage(pattern="^/add_product"))
@@ -179,13 +179,13 @@ async def add_product(event):
         if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        await event.respond(f"Error handling event: {str(e)}")
+        return await event.respond(f"Error handling event: {str(e)}")
 
     try:
 
         message_text = event.text.lower()
         if not message_text.startswith("/add_product"):
-            await event.respond(
+            return await event.respond(
                 "Invalid input. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>")
         try:
             message = list(message_text.split())
@@ -194,9 +194,9 @@ async def add_product(event):
                 return await event.respond(
                     "Invalid input data and be careful about types. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>")
         except ValueError:
-            await event.respond("Invalid input. Use /add_product <product_name> <price> <code>")
+            return await event.respond("Invalid input. Use /add_product <product_name> <price> <code>")
 
-        cursor.execute('''INSERT INTO products_new
+        cursor.execute('''INSERT INTO products
                           (product_name, product_name_fa, part_number, brand, region,
                            product_type, car_brand, car_model, price_usd, inventory, is_available)
                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
@@ -206,7 +206,7 @@ async def add_product(event):
         conn.commit()
         await event.respond(f"add successfully")
     except:
-        await event.respond(f"Error adding product")
+        return await event.respond(f"Error adding product")
 
 
 @client.on(events.NewMessage(pattern=".*\.csv$"))
@@ -228,19 +228,19 @@ async def handle_csv(event):
             csv_reader = csv.reader(csvfile)
             for message in csv_reader:
                 try:
-                    cursor.execute('''INSERT INTO products_new
+                    cursor.execute('''INSERT INTO products
                                       (product_name, product_name_fa, part_number, brand, region,
                                        product_type, car_brand, car_model, price_usd, inventory, is_available)
                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
                         message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8],
                         int(message[9]), int(message[10]), int(message[11])))
                     conn.commit()
-                    await event.respond(f"add successfully")
+                    await event.respond(f"add successfully {message[1]}")
                 except:
-                    await event.respond(f"{message} could not add")
-        await event.respond("CSV file received and processed successfully!")
+                    return await event.respond(f"{message[1]} could not add")
+        return await event.respond("CSV file received and processed successfully!")
     except Exception as e:
-        await event.respond(f"Error handling CSV file: {str(e)}")
+        return await event.respond(f"Error handling CSV file: {str(e)}")
 
 
 @client.on(events.NewMessage(pattern="^/backup$"))
@@ -249,13 +249,12 @@ async def backup_handler(event):
         if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        await event.respond(f"Error handling event: {str(e)}")
-
-    df = pd.read_sql_query("SELECT * FROM product", conn)
+        return await event.respond(f"Error handling event: {str(e)}")
+    df = pd.read_sql_query("SELECT * FROM products", conn)
     df.to_csv('data.csv', index=False)
-    await event.send_file(get_bot_chat_id(), 'data.csv')
+    await client.send_file(event.sender.id, 'data.csv')
     os.remove('data.csv')
-    await event.respond("Your backup file is not On server")
+    return await event.respond("Your backup file is not On server")
 
 
 @client.on(events.NewMessage(pattern='^/help$'))
@@ -264,9 +263,9 @@ async def help_handler(event):
         if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        await event.respond(f"Error handling event: {str(e)}")
+        return await event.respond(f"Error handling event: {str(e)}")
 
-    await event.respond(
+    return await event.respond(
         "All admin commands are : \n"
         "All commands need to be exact!\n\n\n"
         "\b/update_product_value <product_id> <column> <value>  -> to update a product value of specific column \n\n\n"
