@@ -89,9 +89,9 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 ############
 
 
-@user_client.on(events.NewMessage(pattern=r"hi"))
+@user_client.on(events.NewMessage(pattern="hi"))
 async def replay_handler(event):
-    print("Replaying message by bot...", event.text)
+    await  event.respond("Welcome! How can i help you? This is a bot sorry for wrong replay I am testing")
 
 
 ########
@@ -119,16 +119,15 @@ async def replay_handler(event):
 #  ADMIN #
 ##########
 
-@client.on(events.NewMessage(pattern='^/start^'))
+@client.on(events.NewMessage(pattern='^/start$'))
 async def start_handler(event):
-    await event.respond("Welcome! Ask me about a product.")
+    await event.respond("Welcome! How can i help you?")
 
 
 @client.on(events.NewMessage(pattern='^/update_product_value'))
 async def update_product(event):
     try:
-        permissions = await client.get_permissions(event.sender_id)
-        if not permissions.is_admin:
+        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
         await event.respond(f"Error handling event: {str(e)}")
@@ -146,14 +145,13 @@ async def update_product(event):
         await event.respond("Invalid input. Use /update_product_value <product_id> <column> <value>")
 
 
-@client.on(events.NewMessage(pattern="./change_availability"))
+@client.on(events.NewMessage(pattern="^/change_availability"))
 async def change_availability(event):
     try:
-        permissions = await client.get_permissions(event.sender_id)
-        if not permissions.is_admin:
+        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
+        await event.respond(f"Error handling event: {str(e)}")
 
     try:
         message_text = event.text.lower()
@@ -175,14 +173,13 @@ async def change_availability(event):
         await event.respond(f"Error updating availability: {str(e)}")
 
 
-@client.on(events.NewMessage(pattern="./add_product"))
+@client.on(events.NewMessage(pattern="^/add_product"))
 async def add_product(event):
     try:
-        permissions = await client.get_permissions(event.sender_id)
-        if not permissions.is_admin:
+        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
+        await event.respond(f"Error handling event: {str(e)}")
 
     try:
 
@@ -215,8 +212,7 @@ async def add_product(event):
 @client.on(events.NewMessage(pattern=".*\.csv$"))
 async def handle_csv(event):
     try:
-        permissions = await client.get_permissions(event.sender_id)
-        if not permissions.is_admin:
+        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
         await event.respond(f"Error handling event: {str(e)}")
@@ -247,11 +243,10 @@ async def handle_csv(event):
         await event.respond(f"Error handling CSV file: {str(e)}")
 
 
-@client.on(events.NewMessage(pattern="./backup$"))
+@client.on(events.NewMessage(pattern="^/backup$"))
 async def backup_handler(event):
     try:
-        permissions = await client.get_permissions(event.sender_id)
-        if not permissions.is_admin:
+        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
         await event.respond(f"Error handling event: {str(e)}")
@@ -263,23 +258,22 @@ async def backup_handler(event):
     await event.respond("Your backup file is not On server")
 
 
-@client.on(events.NewMessage(pattern='./help'))
+@client.on(events.NewMessage(pattern='^/help$'))
 async def help_handler(event):
     try:
-        permissions = await client.get_permissions(event.sender_id)
-        if not permissions.is_admin:
+        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
         await event.respond(f"Error handling event: {str(e)}")
 
     await event.respond(
         "All admin commands are : \n"
-        "All commands need to be exact!\n"
-        "/update_product_value <product_id> <column> <value>  -> to update a product value of specific column \n"
-        "/change_availability <product_id> <new_availability> ->to change availability of specific product fast! \n"
-        "/backup -> send you a backup csv file from your database.\n"
-        "/add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> -> to add single product \n"
-        "with uploading csv file you can add products to it with order <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>\n"
+        "All commands need to be exact!\n\n\n"
+        "\b/update_product_value <product_id> <column> <value>  -> to update a product value of specific column \n\n\n"
+        "\b/change_availability <product_id> <new_availability> ->to change availability of specific product fast! \n\n\n"
+        "\b/backup -> send you a backup csv file from your database.\n\n\n"
+        "\b/add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> -> to add single product \n\n\n"
+        "with uploading csv file you can add products to it with order <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>\n\n\n"
         "in case of adding be careful about data order and type!\n"
     )
 
