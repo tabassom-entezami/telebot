@@ -3,19 +3,23 @@ import sqlite3
 import os
 import pandas as pd
 from telethon.sync import TelegramClient, events
+from environs import Env
 
 #############
-# base data #
+# database  #
 #############
+env = Env()
+env.read_env()
 
-# Remember to use your own values from my.telegram.org!
+
+# Remember to use your own values from my.telegram.org and add it to .env!
 api_id = os.getenv('API_ID')
 api_hash = os.getenv('API_HASH')
 bot_token = os.getenv('BOT_TOKEN')
 admin_username = os.getenv('ADMIN_USERNAME')
 phone_number = os.getenv('PHONE_NUMBER')
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
-user_client = TelegramClient('bot_session', api_id, api_hash)
+user_client = TelegramClient('user_session', api_id, api_hash).start(phone=phone_number)
 
 columns = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
            "is_available", "region", "product_type", "car_model", "car_brand", "inventory"]
@@ -28,14 +32,6 @@ def get_bot_chat_id():
         chat_id = updates[0].message.chat.id
     return chat_id
 
-@user_client.on(events.UserUpdate())
-async def get_groups():
-    all_chats = await client.get_dialogs()
-    for chat in all_chats:
-        chat.is_group = True
-        if not chat.is_channel:
-            groups[chat.chat_id] = chat
-            print(f"Chat ID: {chat.id}, Title: {chat.title}")
 
 
 def create_or_connect_database(filename='products.db', expected_columns=None):
@@ -56,8 +52,8 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
                                brand TEXT,
                                region TEXT,
                                product_type TEXT,
-                               car_brand,
-                               car_model,
+                               car_brand TEXT,
+                               car_model TEXT,
                                price_usd BIGINT,
                                inventory BIGINT,
                                is_available BOOLEAN)''')
@@ -71,8 +67,15 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
         cursor_check.execute('''CREATE TABLE IF NOT EXISTS products
                           (id INTEGER PRIMARY KEY AUTOINCREMENT,
                            product_name TEXT,
-                           product_code TEXT,
-                           price BIGINT,
+                           product_name_fa TEXT,
+                           part_number TEXT,
+                           brand TEXT,
+                           region TEXT,
+                           product_type TEXT,
+                           car_brand TEXT,
+                           car_model TEXT,
+                           price_usd BIGINT,
+                           inventory BIGINT,
                            is_available BOOLEAN)''')
         conn_check.commit()
         print(f"Created new database: {filename}")
@@ -84,6 +87,11 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 ############
 # by account#
 ############
+
+
+@user_client.on(events.NewMessage(pattern=r"hi"))
+async def replay_handler(event):
+    print("Replaying message by bot...", event.text)
 
 
 ########
@@ -111,19 +119,19 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 #  ADMIN #
 ##########
 
-@client.on(events.NewMessage(pattern='./start'))
+@client.on(events.NewMessage(pattern='^/start^'))
 async def start_handler(event):
-    return await event.respond("Welcome! Ask me about a product.")
+    await event.respond("Welcome! Ask me about a product.")
 
 
-@client.on(events.NewMessage(pattern='./update_product_value'))
+@client.on(events.NewMessage(pattern='^/update_product_value'))
 async def update_product(event):
     try:
         permissions = await client.get_permissions(event.sender_id)
         if not permissions.is_admin:
             return await event.respond("Sorry, only administrators can access this event.")
     except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
+        await event.respond(f"Error handling event: {str(e)}")
 
     try:
         _, product_id, column, value = event.text.split()
@@ -133,9 +141,9 @@ async def update_product(event):
 
         cursor.execute(f'UPDATE products SET {column} = ? WHERE id = ?', (value, int(product_id)))
         conn.commit()
-        return await event.respond(f"Product {product_id} updated successfully.")
+        await event.respond(f"Product {product_id} updated successfully.")
     except ValueError:
-        return await event.respond("Invalid input. Use /update_product_value <product_id> <column> <value>")
+        await event.respond("Invalid input. Use /update_product_value <product_id> <column> <value>")
 
 
 @client.on(events.NewMessage(pattern="./change_availability"))
@@ -150,11 +158,11 @@ async def change_availability(event):
     try:
         message_text = event.text.lower()
         if message_text.startswith("/change_availability"):
-            return await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
+            await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
         try:
             _, product_id, new_availability = message_text.split()
         except ValueError:
-            return await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
+            await event.respond("Invalid input. Use /change_availability <product_id> <new_availability>")
 
         product_id = int(product_id)
         new_availability = new_availability.lower() == "true"
@@ -162,9 +170,9 @@ async def change_availability(event):
         cursor.execute("UPDATE products SET is_available = ? WHERE id = ?", (new_availability, product_id))
         conn.commit()
 
-        return await event.respond("Availability updated successfully!")
+        await event.respond("Availability updated successfully!")
     except Exception as e:
-        return await event.respond(f"Error updating availability: {str(e)}")
+        await event.respond(f"Error updating availability: {str(e)}")
 
 
 @client.on(events.NewMessage(pattern="./add_product"))
@@ -180,7 +188,7 @@ async def add_product(event):
 
         message_text = event.text.lower()
         if not message_text.startswith("/add_product"):
-            return await event.respond(
+            await event.respond(
                 "Invalid input. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>")
         try:
             message = list(message_text.split())
@@ -189,7 +197,7 @@ async def add_product(event):
                 return await event.respond(
                     "Invalid input data and be careful about types. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>")
         except ValueError:
-            return await event.respond("Invalid input. Use /add_product <product_name> <price> <code>")
+            await event.respond("Invalid input. Use /add_product <product_name> <price> <code>")
 
         cursor.execute('''INSERT INTO products_new
                           (product_name, product_name_fa, part_number, brand, region,
@@ -199,9 +207,9 @@ async def add_product(event):
             int(message[9]),
             int(message[10]), int(message[11])))
         conn.commit()
-        return await event.respond(f"add successfully")
+        await event.respond(f"add successfully")
     except:
-        return await event.respond(f"Error adding product")
+        await event.respond(f"Error adding product")
 
 
 @client.on(events.NewMessage(pattern=".*\.csv$"))
@@ -252,7 +260,7 @@ async def backup_handler(event):
     df.to_csv('data.csv', index=False)
     await event.send_file(get_bot_chat_id(), 'data.csv')
     os.remove('data.csv')
-    return event.respond("Your backup file is not On server")
+    await event.respond("Your backup file is not On server")
 
 
 @client.on(events.NewMessage(pattern='./help'))
@@ -280,6 +288,6 @@ if __name__ == '__main__':
     conn = create_or_connect_database('product.db', columns)
     cursor = conn.cursor()
     client.start()
-    user_client.start(os.getenv(phone_number))
+    user_client.start()
     user_client.run_until_disconnected()
     client.run_until_disconnected()
