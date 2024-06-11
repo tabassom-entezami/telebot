@@ -1,6 +1,8 @@
 import csv
 import sqlite3
 import os
+import tempfile
+
 import pandas as pd
 from telethon.sync import TelegramClient, events
 from environs import Env
@@ -10,7 +12,6 @@ from environs import Env
 #############
 env = Env()
 env.read_env()
-
 
 # Remember to use your own values from my.telegram.org and add it to .env!
 api_id = os.getenv('API_ID')
@@ -24,14 +25,17 @@ user_client = TelegramClient('user_session', api_id, api_hash).start(phone=phone
 columns = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
            "is_available", "region", "product_type", "car_model", "car_brand", "inventory"]
 
-groups={}
+groups = {}
+
+
+def _admin_validator(event):
+    return event.is_private and event.sender.username == admin_username
 
 def get_bot_chat_id():
     with TelegramClient('bot_session', api_id, api_hash) as bot_client:
         updates = bot_client.get_updates()
         chat_id = updates[0].message.chat.id
     return chat_id
-
 
 
 def create_or_connect_database(filename='products.db', expected_columns=None):
@@ -44,19 +48,21 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 
         existing_columns = [col[1] for col in columns_exists]
         if existing_columns != expected_columns:
-            cursor_check.execute('''CREATE TABLE IF NOT EXISTS products_new
-                              (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                               product_name TEXT,
-                               product_name_fa TEXT,
-                               part_number TEXT,
-                               brand TEXT,
-                               region TEXT,
-                               product_type TEXT,
-                               car_brand TEXT,
-                               car_model TEXT,
-                               price_usd BIGINT,
-                               inventory BIGINT,
-                               is_available BOOLEAN)''')
+            cursor_check.execute(
+                '''CREATE TABLE IF NOT EXISTS products_new
+                                              (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                               product_name TEXT,
+                                               product_name_fa TEXT,
+                                               part_number TEXT,
+                                               brand TEXT,
+                                               region TEXT,
+                                               product_type TEXT,
+                                               car_brand TEXT,
+                                               car_model TEXT,
+                                               price_usd BIGINT,
+                                               inventory BIGINT,
+                                               is_available BOOLEAN)'''
+            )
             cursor_check.execute("INSERT INTO products_new SELECT * FROM products")
             cursor_check.execute("DROP TABLE IF EXISTS products")
             cursor_check.execute("ALTER TABLE products_new RENAME TO products")
@@ -64,19 +70,21 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
     else:
         conn_check = sqlite3.connect(filename)
         cursor_check = conn_check.cursor()
-        cursor_check.execute('''CREATE TABLE IF NOT EXISTS products
-                          (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                           product_name TEXT,
-                           product_name_fa TEXT,
-                           part_number TEXT,
-                           brand TEXT,
-                           region TEXT,
-                           product_type TEXT,
-                           car_brand TEXT,
-                           car_model TEXT,
-                           price_usd BIGINT,
-                           inventory BIGINT,
-                           is_available BOOLEAN)''')
+        cursor_check.execute(
+            '''CREATE TABLE IF NOT EXISTS products
+                                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                       product_name TEXT,
+                                       product_name_fa TEXT,
+                                       part_number TEXT,
+                                       brand TEXT,
+                                       region TEXT,
+                                       product_type TEXT,
+                                       car_brand TEXT,
+                                       car_model TEXT,
+                                       price_usd BIGINT,
+                                       inventory BIGINT,
+                                       is_available BOOLEAN)'''
+        )
         conn_check.commit()
         print(f"Created new database: {filename}")
 
@@ -89,29 +97,30 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 ############
 
 
-@user_client.on(events.NewMessage(pattern="hi"))
-async def replay_handler(event):
-    await  event.respond("Welcome! How can i help you? This is a bot sorry for wrong replay I am testing")
-
-
 ########
 # by bot#
 ########
-# @client.on(events.NewMessage())
-# async def handle_message(event):
-#     if event.text.lower().startswith('/price'):
-#         product_query = event.text[7:].strip()  # Extract product query from the message
-#         cursor.execute('SELECT name, code, price, is_available FROM products WHERE name = ? OR code = ?',
-#                        (product_query, product_query))
-#         result = cursor.fetchone()
-#         if result:
-#             name, code, price, is_available = result
-#             if is_available:
-#                 await event.respond(f"Product: {name} (Code: {code})\nPrice: ${price:.2f}")
-#             else:
-#                 await event.respond(f"{name} is currently unavailable.")
-#         else:
-#             await event.respond(f"Product '{product_query}' not found.")
+async def handle_message(event):
+    chat = await event.get_chat()
+    if getattr(chat, 'broadcast', False):
+        return
+
+    words = event.text.split()
+    cursor.execute(f'SELECT product_name, part_number, price_usd, is_available FROM products '
+                   f'WHERE product_name COLLATE NOCASE IN ({("?," * len(words))[:-1]}) OR '
+                   f'part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
+        (*words, *words))
+
+    user = await event.get_sender()
+    for row in cursor.fetchall():
+        name, code, price, is_available = row
+        if is_available:
+            await event.client.send_message(user, f"Product: {name} (Code: {code})\nPrice: ${price:.2f}")
+        else:
+            await event.client.send_message(user, f"{name} is currently unavailable.")
+
+client.on(events.NewMessage(incoming=True))(handle_message)
+user_client.on(events.NewMessage(incoming=True))(handle_message)
 
 
 ##########
@@ -121,17 +130,11 @@ async def replay_handler(event):
 
 @client.on(events.NewMessage(pattern='^/start$'))
 async def start_handler(event):
-    return await event.respond("Welcome! How can i help you?")
+    return await event.respond("Welcome! How can I help you?")
 
 
-@client.on(events.NewMessage(pattern='^/update_product_value'))
+@client.on(events.NewMessage(pattern='^/update_product_value', incoming=True, func=_admin_validator))
 async def update_product(event):
-    try:
-        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
-            return await event.respond("Sorry, only administrators can access this event.")
-    except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
-
     try:
         _, product_id, column, value = event.text.split()
 
@@ -145,14 +148,8 @@ async def update_product(event):
         return await event.respond("Invalid input. Use /update_product_value <product_id> <column> <value>")
 
 
-@client.on(events.NewMessage(pattern="^/change_availability"))
+@client.on(events.NewMessage(pattern="^/change_availability", incoming=True, func=_admin_validator))
 async def change_availability(event):
-    try:
-        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
-            return await event.respond("Sorry, only administrators can access this event.")
-    except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
-
     try:
         message_text = event.text.lower()
         if message_text.startswith("/change_availability"):
@@ -173,98 +170,68 @@ async def change_availability(event):
         return await event.respond(f"Error updating availability: {str(e)}")
 
 
-@client.on(events.NewMessage(pattern="^/add_product"))
+@client.on(events.NewMessage(pattern="^/add_product", incoming=True, func=_admin_validator))
 async def add_product(event):
     try:
-        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
-            return await event.respond("Sorry, only administrators can access this event.")
-    except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
-
-    try:
-
         message_text = event.text.lower()
         if not message_text.startswith("/add_product"):
             return await event.respond(
-                "Invalid input. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>")
+                "Invalid input. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>"
+            )
         try:
             message = list(message_text.split())
             if len(message) != 12 or not (
                     message[-3].isnumeric() and message[-2].isnumeric() and message[-1].isnumeric()):
                 return await event.respond(
-                    "Invalid input data and be careful about types. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>")
+                    "Invalid input data and be careful about types. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>"
+                )
         except ValueError:
             return await event.respond("Invalid input. Use /add_product <product_name> <price> <code>")
 
-        cursor.execute('''INSERT INTO products
-                          (product_name, product_name_fa, part_number, brand, region,
-                           product_type, car_brand, car_model, price_usd, inventory, is_available)
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
-            message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8],
-            int(message[9]),
-            int(message[10]), int(message[11])))
+        cursor.execute(
+            '''INSERT INTO products
+                                      (product_name, product_name_fa, part_number, brand, region,
+                                       product_type, car_brand, car_model, price_usd, inventory, is_available)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+                message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8],
+                int(message[9]),
+                int(message[10]), int(message[11]))
+        )
         conn.commit()
         await event.respond(f"add successfully")
     except:
         return await event.respond(f"Error adding product")
 
 
-@client.on(events.NewMessage(pattern=".*\.csv$"))
+@client.on(events.NewMessage(incoming=True, func=_admin_validator))
 async def handle_csv(event):
     try:
-        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
-            return await event.respond("Sorry, only administrators can access this event.")
-    except Exception as e:
-        await event.respond(f"Error handling event: {str(e)}")
+        file = event.file
+        if not file:
+            return
 
-    try:
-        file = await event.get_file()
-        file_name = file.name
+        if file.mime_type != 'text/csv':
+            return
 
-        file_path = f"downloads/{file_name}"
-        await file.download_to_drive(file_path)
-
-        with open(file_path, "r") as csvfile:
-            csv_reader = csv.reader(csvfile)
-            for message in csv_reader:
-                try:
-                    cursor.execute('''INSERT INTO products
-                                      (product_name, product_name_fa, part_number, brand, region,
-                                       product_type, car_brand, car_model, price_usd, inventory, is_available)
-                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
-                        message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8],
-                        int(message[9]), int(message[10]), int(message[11])))
-                    conn.commit()
-                    await event.respond(f"add successfully {message[1]}")
-                except:
-                    return await event.respond(f"{message[1]} could not add")
-        return await event.respond("CSV file received and processed successfully!")
+        with tempfile.NamedTemporaryFile() as tmp:
+            await event.download_media(tmp.name)
+            df = pd.read_csv(tmp.name)
+            df.to_sql('products', conn, if_exists='append', index=False)
+            return await event.respond("Data imported successfully")
     except Exception as e:
         return await event.respond(f"Error handling CSV file: {str(e)}")
 
 
-@client.on(events.NewMessage(pattern="^/backup$"))
+@client.on(events.NewMessage(pattern="^/backup$", incoming=True, func=_admin_validator))
 async def backup_handler(event):
-    try:
-        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
-            return await event.respond("Sorry, only administrators can access this event.")
-    except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
     df = pd.read_sql_query("SELECT * FROM products", conn)
     df.to_csv('data.csv', index=False)
     await client.send_file(event.sender.id, 'data.csv')
     os.remove('data.csv')
-    return await event.respond("Your backup file is not On server")
 
 
-@client.on(events.NewMessage(pattern='^/help$'))
+@client.on(events.NewMessage(pattern="^/help$", incoming=True, func=_admin_validator))
 async def help_handler(event):
-    try:
-        if not event.sender.username == os.getenv('ADMIN_USERNAME') :
-            return await event.respond("Sorry, only administrators can access this event.")
-    except Exception as e:
-        return await event.respond(f"Error handling event: {str(e)}")
-
     return await event.respond(
         "All admin commands are : \n"
         "All commands need to be exact!\n\n\n"
