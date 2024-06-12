@@ -216,7 +216,7 @@ async def handle_csv(event):
         with tempfile.NamedTemporaryFile() as tmp:
             await event.download_media(tmp.name)
             df = pd.read_csv(tmp.name)
-            df.to_sql('products', conn, if_exists='append', index=False)
+            df.to_sql('products', conn, if_exists='replace', index=False)
             return await event.respond("Data imported successfully")
     except Exception as e:
         return await event.respond(f"Error handling CSV file: {str(e)}")
