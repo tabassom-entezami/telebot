@@ -91,21 +91,18 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
     return conn_check
 
 
-# todo
-############
-# by account#
-############
 
 
-########
-# by bot#
-########
+##########
+# message#
+##########
 async def handle_message(event):
     chat = await event.get_chat()
     if getattr(chat, 'broadcast', False):
         return
 
     words = event.text.split()
+    words = [i.replace('/', '').replace('-', '').replace('_', '') for i in words]
     cursor.execute(f'SELECT product_name, part_number, price_usd, is_available FROM products '
                    f'WHERE product_name COLLATE NOCASE IN ({("?," * len(words))[:-1]}) OR '
                    f'part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
