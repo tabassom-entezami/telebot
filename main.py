@@ -1,3 +1,5 @@
+import asyncio
+import csv
 import sqlite3
 import os
 import tempfile
@@ -26,9 +28,7 @@ user_client = TelegramClient('user_session', api_id, api_hash).start(phone=phone
 columns = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
            "is_available", "region", "product_type", "car_model", "car_brand", "inventory"]
 
-columns_analyze_table = ["id", "part_number", "from_group", "created_at"]
-
-groups = {}
+is_running = False
 
 
 # if only admins can access use this
@@ -101,15 +101,19 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 ##########
 # message#
 ##########
+
 async def handle_message(event):
     chat = await event.get_chat()
-
-    # only analyze word of group messages, broadcast is for channels and status is for users
-    if getattr(chat, 'broadcast', False) and getattr(chat, 'status', False):
+    if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
         return
 
+    """
+       cursor.execute(f'SELECT product_name, part_number, price_usd, is_available FROM products '
+                   f'WHERE product_name COLLATE NOCASE IN ({("?," * len(words))[:-1]}) OR '
+                   f'part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
+        (*words, *words))
+    """
 
-    # todo replacing function and handle space
     words = event.text.split()
     words = [i.replace('/', '').replace('-', '').replace('_', '').replace('?', '').replace('.', '') for i in words]
 
@@ -126,7 +130,7 @@ async def handle_message(event):
 
     user = await event.get_sender()
     for row in cursor.fetchall():
-        name, code, price, is_available = row
+        name, code, price, is_available, brand = row
         if is_available:
             await event.client.send_message(user, f"Product: {name} (Code: {code})\nPrice: ${price:.2f}")
         else:
@@ -142,8 +146,8 @@ user_client.on(events.NewMessage(incoming=True))(handle_message)
 #  ADMIN #
 ##########
 
-@client.on(events.NewMessage(pattern='^/start$'))
-async def start_handler(event):
+@client.on(events.NewMessage(pattern='^/welcome$'))
+async def welcome(event):
     return await event.respond("Welcome! How can I help you?")
 
 
