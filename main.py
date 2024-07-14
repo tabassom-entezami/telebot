@@ -146,6 +146,22 @@ user_client.on(events.NewMessage(incoming=True))(handle_message)
 #  ADMIN #
 ##########
 
+#user client answering
+
+@client.on(events.NewMessage(pattern='/start', incoming=True, func=_admin_validator))
+async def start(event):
+    global is_running
+    is_running = True
+    await event.reply('Bot started!')
+
+@client.on(events.NewMessage(pattern='/stop', incoming=True, func=_admin_validator))
+async def stop(event):
+    global is_running
+    is_running = False
+    await event.reply('Bot stopped!')
+
+
+
 @client.on(events.NewMessage(pattern='^/welcome$'))
 async def welcome(event):
     return await event.respond("Welcome! How can I help you?")
