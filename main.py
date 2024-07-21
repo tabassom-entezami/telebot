@@ -105,7 +105,7 @@ def create_or_connect_database(filename='products.db', expected_columns=None):
 async def handle_message(event):
     chat = await event.get_chat()
 
-    if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running or not getattr(chat, 'BOT', False):
+    if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
         return
 
     user = await event.get_sender()
@@ -115,11 +115,8 @@ async def handle_message(event):
         {"۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4", "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
          " ": "", "?": "", "-": "", "_": "", ".": "", "/": "", "\\": ""})
     chat = str(chat).translate(En_to_Fa).upper()
-    print(chat)
     for row in cursor.fetchall():
         part_number, is_available, brand = row
-        print(part_number, is_available, brand)
-        print(str(part_number).upper(), bool(is_available))
         if str(part_number).upper() in chat and bool(is_available):
             await event.client.send_message(user, f"Product: {part_number} (brand: {brand})")
         else:
