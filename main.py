@@ -1,16 +1,13 @@
 import asyncio
-import csv
-import sqlite3
 import os
 import tempfile
 
 import pandas as pd
 from telethon.sync import TelegramClient, events
 from environs import Env
+from createdb import PRODUCT_CONN, LOG_CONN
 
-#############
-# database  #
-#############
+
 env = Env()
 env.read_env()
 
@@ -24,9 +21,6 @@ phone_number = os.getenv('PHONE_NUMBER')
 # creating clients
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 user_client = TelegramClient('user_session', api_id, api_hash).start(phone=phone_number)
-
-columns = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
-           "is_available", "region", "product_type", "car_model", "car_brand", "inventory"]
 
 is_running = False
 
@@ -43,68 +37,13 @@ def get_bot_chat_id():
     return chat_id
 
 
-# database connection
-# todo table for data analyze
-def create_or_connect_database(filename='products.db', expected_columns=None):
-    if os.path.isfile(filename):
-
-        conn_check = sqlite3.connect(filename)
-        cursor_check = conn_check.cursor()
-        cursor_check.execute("PRAGMA table_info(products)")
-        columns_exists = cursor_check.fetchall()
-
-        existing_columns = [col[1] for col in columns_exists]
-        if existing_columns != expected_columns:
-            cursor_check.execute(
-                '''CREATE TABLE IF NOT EXISTS products_new
-                                              (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                               product_name TEXT,
-                                               product_name_fa TEXT,
-                                               part_number TEXT,
-                                               brand TEXT,
-                                               region TEXT,
-                                               product_type TEXT,
-                                               car_brand TEXT,
-                                               car_model TEXT,
-                                               price_usd BIGINT,
-                                               inventory BIGINT,
-                                               is_available BOOLEAN)'''
-            )
-            cursor_check.execute("INSERT INTO products_new SELECT * FROM products")
-            cursor_check.execute("DROP TABLE IF EXISTS products")
-            cursor_check.execute("ALTER TABLE products_new RENAME TO products")
-        print(f"Connected to existing database: {filename}")
-    else:
-        conn_check = sqlite3.connect(filename)
-        cursor_check = conn_check.cursor()
-        cursor_check.execute(
-            '''CREATE TABLE IF NOT EXISTS products
-                                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                       product_name TEXT,
-                                       product_name_fa TEXT,
-                                       part_number TEXT,
-                                       brand TEXT,
-                                       region TEXT,
-                                       product_type TEXT,
-                                       car_brand TEXT,
-                                       car_model TEXT,
-                                       price_usd BIGINT,
-                                       inventory BIGINT,
-                                       is_available BOOLEAN)'''
-        )
-        conn_check.commit()
-        print(f"Created new database: {filename}")
-
-    return conn_check
-
-
 ##########
 # message#
 ##########
 
+# update message cleaning
 async def handle_message(event):
     chat = await event.get_chat()
-
     if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
         return
 
@@ -127,13 +66,6 @@ async def different_method_handle_message(event):
     chat = await event.get_chat()
     if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
         return
-
-    """
-       cursor.execute(f'SELECT product_name, part_number, price_usd, is_available FROM products '
-                   f'WHERE product_name COLLATE NOCASE IN ({("?," * len(words))[:-1]}) OR '
-                   f'part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
-        (*words, *words))
-    """
 
     words = event.text.split()
     words = [i.replace('/', '').replace('-', '').replace('_', '').replace('?', '').replace('.', '') for i in words]
@@ -168,19 +100,18 @@ user_client.on(events.NewMessage(incoming=True))(handle_message)
 ##########
 
 #user client answering
-
 @client.on(events.NewMessage(pattern='/start', incoming=True, func=_admin_validator))
 async def start(event):
     global is_running
     is_running = True
     await event.reply('Bot started!')
 
+
 @client.on(events.NewMessage(pattern='/stop', incoming=True, func=_admin_validator))
 async def stop(event):
     global is_running
     is_running = False
     await event.reply('Bot stopped!')
-
 
 
 @client.on(events.NewMessage(pattern='^/welcome$'))
@@ -299,8 +230,13 @@ async def help_handler(event):
     )
 
 
+def create_or_connect_answer_db(param, columns):
+    pass
+
+
 if __name__ == '__main__':
-    conn = create_or_connect_database('product.db', columns)
+    conn = PRODUCT_CONN
+    conn_log = LOG_CONN
     cursor = conn.cursor()
     client.start()
     user_client.start()
