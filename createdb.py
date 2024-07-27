@@ -7,8 +7,8 @@ import sqlite3
 #############
 
 columns_product = ["id", "product_name", "product_name_fa", "part_number", "brand", "price_usd",
-                   "is_available", "region", "product_type", "car_model", "car_brand", "inventory", "L/R"]
-columns_answer = ["id", "sender", "from_group", "user_message", "answer", "datetime"]
+                   "is_available", "region", "product_type", "car_model", "car_brand", "inventory", "lR"]
+columns_answer = ["id", "sender", "from_group", "user_message", "answer", "datetime", "lR"]
 
 
 def check_existence(db):
@@ -43,7 +43,7 @@ def create_or_connect_product_db(filename='products.db', expected_columns=[]):
                                                price_usd BIGINT,
                                                inventory BIGINT,
                                                is_available BOOLEAN,
-                                               L/R TEXT)'''
+                                               lR TEXT)'''
             )
             cursor_check.execute("DROP TABLE IF EXISTS products")
             cursor_check.execute("ALTER TABLE products_new RENAME TO products")
@@ -65,7 +65,7 @@ def create_or_connect_product_db(filename='products.db', expected_columns=[]):
                                        price_usd BIGINT,
                                        inventory BIGINT,
                                        is_available BOOLEAN,
-                                       L/R TEXT)''')
+                                       lR TEXT)''')
         conn_check.commit()
         print(f"Created new database: {filename}")
     return conn_check
@@ -99,7 +99,8 @@ def create_or_connect_answer_db(filename='answerlog.db', expected_columns=[]):
                                            from_group TEXT,
                                            user_message TEXT,
                                            answer TEXT,
-                                           datetime TIMESTAMP)''')
+                                           datetime TIMESTAMP,
+                                           lR TEXT)''')
         conn_check.commit()
         print(f"Created new database: {filename}")
     return conn_check

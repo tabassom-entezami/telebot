@@ -51,32 +51,34 @@ async def handle_message(event):
 
     user = await event.get_sender()
 
-    cursor.execute(f'SELECT part_number, is_available, brand FROM products')
+    cursor.execute(f'SELECT part_number, is_available, brand, lR FROM products')
     En_to_Fa = str.maketrans(
         {"۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4", "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
          " ": "", "?": "", "-": "", "_": "", ".": "", "/": "", "\\": ""})
     chat = str(chat).translate(En_to_Fa).upper()
     for row in cursor.fetchall():
-        part_number, is_available, brand = row
+        part_number, is_available, brand, lr = row
         if str(part_number).upper() in chat and bool(is_available):
             local_datetime = event.date.astimezone(tz.tzlocal())
             print(local_datetime, event.date)
 
             chat_title = utils.get_display_name(event.get_chat())
             print(chat_title)
+            if bool(lr):
+                message = f"Product: {part_number} (brand: {brand}) with LR"
+            else:
+                message = f"Product: {part_number} (brand: {brand})"
 
-            message = f"Product: {part_number} (brand: {brand})"
-            await event.client.send_message(user, message)
-
-            # log of answer
+            #logging
             cursor_log.execute(
                 '''INSERT INTO answerlog
-                                          (sender, from_group, user_message, answer, datetime)
-                                          VALUES (?, ?, ?, ?, ?)''', (
-                    user, chat_title, event.get_chat(), message, local_datetime)
+                                          (sender, from_group, user_message, answer, datetime, lR)
+                                          VALUES (?, ?, ?, ?, ?, ?)''', (
+                    user, chat_title, event.get_chat(), message, local_datetime, lr)
             )
             conn.commit()
 
+            await event.client.send_message(user, message)
         else:
             await event.client.send_message(user, f"{part_number} is currently unavailable.")
 
