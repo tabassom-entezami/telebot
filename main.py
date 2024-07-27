@@ -1,10 +1,12 @@
-import asyncio
 import os
 import tempfile
-
 import pandas as pd
+
 from telethon.sync import TelegramClient, events
 from environs import Env
+from dateutil import tz
+from telethon import utils
+
 from createdb import PRODUCT_CONN, LOG_CONN
 
 
@@ -41,7 +43,7 @@ def get_bot_chat_id():
 # message#
 ##########
 
-# update message cleaning
+# update message answering and improve translating
 async def handle_message(event):
     chat = await event.get_chat()
     if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
@@ -57,7 +59,24 @@ async def handle_message(event):
     for row in cursor.fetchall():
         part_number, is_available, brand = row
         if str(part_number).upper() in chat and bool(is_available):
-            await event.client.send_message(user, f"Product: {part_number} (brand: {brand})")
+            local_datetime = event.date.astimezone(tz.tzlocal())
+            print(local_datetime, event.date)
+
+            chat_title = utils.get_display_name(event.get_chat())
+            print(chat_title)
+
+            message = f"Product: {part_number} (brand: {brand})"
+            await event.client.send_message(user, message)
+
+            # log of answer
+            cursor_log.execute(
+                '''INSERT INTO answerlog
+                                          (sender, from_group, user_message, answer, datetime)
+                                          VALUES (?, ?, ?, ?, ?)''', (
+                    user, chat_title, event.get_chat(), message, local_datetime)
+            )
+            conn.commit()
+
         else:
             await event.client.send_message(user, f"{part_number} is currently unavailable.")
 
@@ -99,7 +118,7 @@ user_client.on(events.NewMessage(incoming=True))(handle_message)
 #  ADMIN #
 ##########
 
-#user client answering
+#user client start answering in group
 @client.on(events.NewMessage(pattern='/start', incoming=True, func=_admin_validator))
 async def start(event):
     global is_running
@@ -107,6 +126,7 @@ async def start(event):
     await event.reply('Bot started!')
 
 
+# user client stop answering in group
 @client.on(events.NewMessage(pattern='/stop', incoming=True, func=_admin_validator))
 async def stop(event):
     global is_running
@@ -210,10 +230,18 @@ async def handle_csv(event):
 
 @client.on(events.NewMessage(pattern="^/backup$", incoming=True, func=_admin_validator))
 async def backup_handler(event):
-    df = pd.read_sql_query("SELECT * FROM products", conn)
+    df = pd.read_sql_query("SELECT * FROM products", conn_log)
     df.to_csv('data.csv', index=False)
     await client.send_file(event.sender.id, 'data.csv')
     os.remove('data.csv')
+
+
+@client.on(events.NewMessage(pattern="^/log$", incoming=True, func=_admin_validator))
+async def log_handler(event):
+    df = pd.read_sql_query("SELECT * FROM answerlog", conn)
+    df.to_csv('log.csv', index=False)
+    await client.send_file(event.sender.id, 'log.csv')
+    os.remove('log.csv')
 
 
 @client.on(events.NewMessage(pattern="^/help$", incoming=True, func=_admin_validator))
@@ -238,6 +266,7 @@ if __name__ == '__main__':
     conn = PRODUCT_CONN
     conn_log = LOG_CONN
     cursor = conn.cursor()
+    cursor_log = conn_log.cursor()
     client.start()
     user_client.start()
     user_client.run_until_disconnected()
