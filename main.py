@@ -268,7 +268,6 @@ if __name__ == '__main__':
     conn = PRODUCT_CONN
     conn_log = LOG_CONN
     cursor = conn.cursor()
-    cursor_log = conn_log.cursor()
     client.start()
     user_client.start()
     user_client.run_until_disconnected()

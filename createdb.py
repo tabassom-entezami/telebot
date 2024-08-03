@@ -47,7 +47,7 @@ def create_or_connect_product_db(filename='products.db', expected_columns=[]):
             )
             cursor_check.execute("DROP TABLE IF EXISTS products")
             cursor_check.execute("ALTER TABLE products_new RENAME TO products")
-        print(f"Connected to existing database: {filename}")
+        print(f"Connected to existing database: {filename} to create product")
     else:
         conn_check = sqlite3.connect(filename)
         cursor_check = conn_check.cursor()
@@ -67,7 +67,7 @@ def create_or_connect_product_db(filename='products.db', expected_columns=[]):
                                        is_available BOOLEAN,
                                        lR TEXT)''')
         conn_check.commit()
-        print(f"Created new database: {filename}")
+        print(f"Created new database: {filename} to connect product")
     return conn_check
 
 
@@ -87,7 +87,7 @@ def create_or_connect_answer_db(filename='answerlog.db', expected_columns=[]):
         )
         cursor_check.execute("DROP TABLE IF EXISTS answerlog")
         cursor_check.execute("ALTER TABLE log_new RENAME TO answerlog")
-        print(f"Connected to existing database: {filename}")
+        print(f"Connected to existing database: {filename} to create answer log")
 
     else:
         conn_check = sqlite3.connect(filename)
@@ -102,9 +102,9 @@ def create_or_connect_answer_db(filename='answerlog.db', expected_columns=[]):
                                            datetime TIMESTAMP,
                                            lR TEXT)''')
         conn_check.commit()
-        print(f"Created new database: {filename}")
+        print(f"Created new database: {filename} to connect answerlog")
     return conn_check
 
 
 PRODUCT_CONN = create_or_connect_product_db('product.db', columns_product)
-LOG_CONN = create_or_connect_answer_db('answerlog.db', columns_answer)
+LOG_CONN = create_or_connect_answer_db('product.db', columns_answer)
