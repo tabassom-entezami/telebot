@@ -19,6 +19,8 @@ api_hash = os.getenv('API_HASH')
 bot_token = os.getenv('BOT_TOKEN')
 admin_usernames = list(str(os.getenv('ADMIN_USERNAME')).split())
 phone_number = os.getenv('PHONE_NUMBER')
+simple_answer_text = os.getenv('SIMPLE_ANSWER_TEXT')
+conditional_answer_text = os.getenv('CONDITIONAL_ANSWER_TEXT')
 
 # creating clients
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
@@ -46,69 +48,65 @@ def get_bot_chat_id():
 # update message answering and improve translating
 async def handle_message(event):
     chat = await event.get_chat()
-    if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
+    if getattr(chat, 'broadcast', False) or not is_running:
         return
-
     user = await event.get_sender()
 
-    cursor.execute(f'SELECT part_number, is_available, brand, lR FROM products')
+    res = cursor.execute(f'SELECT part_number, is_available, brand, LR FROM products')
     En_to_Fa = str.maketrans(
         {"۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4", "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
          " ": "", "?": "", "-": "", "_": "", ".": "", "/": "", "\\": ""})
-    chat = str(chat).translate(En_to_Fa).upper()
-    for row in cursor.fetchall():
+    chat = str(event.text).translate(En_to_Fa).upper()
+    for row in res.fetchall():
         part_number, is_available, brand, lr = row
         if str(part_number).upper() in chat and bool(is_available):
             local_datetime = event.date.astimezone(tz.tzlocal())
-            print(local_datetime, event.date)
 
-            chat_title = utils.get_display_name(event.get_chat())
-            print(chat_title)
+            chat_title = utils.get_display_name(await event.get_chat())
             if bool(lr):
-                message = f"Product: {part_number} (brand: {brand}) with LR"
+                message = conditional_answer_text.format(part_number=part_number, brand=brand).replace('\\n', '\n')
             else:
-                message = f"Product: {part_number} (brand: {brand})"
+                message = simple_answer_text.format(part_number=part_number, brand=brand).replace('\\n', '\n')
 
             #logging
-            cursor_log.execute(
+            cursor.execute(
                 '''INSERT INTO answerlog
-                                          (sender, from_group, user_message, answer, datetime, lR)
-                                          VALUES (?, ?, ?, ?, ?, ?)''', (
-                    user, chat_title, event.get_chat(), message, local_datetime, lr)
+                                          (sender, from_group, part_number, user_message, answer, datetime, LR)
+                                          VALUES (?, ?, ?, ?, ?, ?, ?)''', (
+                    (user.first_name or '') + ' ' + (user.last_name or ''), chat_title, part_number, event.text, message, local_datetime, lr)
             )
             conn.commit()
 
             await event.client.send_message(user, message)
-        else:
-            await event.client.send_message(user, f"{part_number} is currently unavailable.")
 
-
-async def different_method_handle_message(event):
-    chat = await event.get_chat()
-    if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
-        return
-
-    words = event.text.split()
-    words = [i.replace('/', '').replace('-', '').replace('_', '').replace('?', '').replace('.', '') for i in words]
-
-    #part number and name
-    # cursor.execute(f'SELECT product_name, part_number, price_usd, is_available FROM products '
-    #                f'WHERE product_name COLLATE NOCASE IN ({("?," * len(words))[:-1]}) OR '
-    #                f'part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
-    #                (*words, *words))
-
-    # just part number
-    cursor.execute(f'SELECT product_name, part_number, price_usd, is_available, brand FROM products '
-                   f'WHERE part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
-                   words)
-
-    user = await event.get_sender()
-    for row in cursor.fetchall():
-        name, code, price, is_available, brand = row
-        if is_available:
-            await event.client.send_message(user, f"Product: {name} (Code: {code})\nPrice: ${price:.2f}")
-        else:
-            await event.client.send_message(user, f"{name} is currently unavailable.")
+#
+# async def different_method_handle_message(event):
+#     chat = await event.get_chat()
+#     if getattr(chat, 'broadcast', False) or getattr(chat, 'status', False) or not is_running:
+#         return
+#
+#     words = event.text.split()
+#     words = [i.replace('/', '').replace('-', '').replace('_', '').replace('?', '').replace('.', '') for i in words]
+#
+#     #part number and name
+#     # cursor.execute(f'SELECT product_name, part_number, price_usd, is_available FROM products '
+#     #                f'WHERE product_name COLLATE NOCASE IN ({("?," * len(words))[:-1]}) OR '
+#     #                f'part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
+#     #                (*words, *words))
+#
+#     # just part number
+#     cursor.execute(f'SELECT product_name, part_number, price_usd, is_available, brand FROM products '
+#                    f'WHERE part_number COLLATE NOCASE IN ({("?," * len(words))[:-1]})',
+#                    words)
+#
+#     user = await event.get_sender()
+#     for row in cursor.fetchall():
+#         name, code, price, is_available, brand = row
+#         if is_available:
+#             await event.client.send_message(user, f"{simple_answer_text}")
+#         else:
+#             if not_available_test:
+#                 await event.client.send_message(user, not_available_test)
 
 
 client.on(events.NewMessage(incoming=True))(handle_message)
@@ -184,11 +182,11 @@ async def add_product(event):
         message_text = event.text.lower()
         if not message_text.startswith("/add_product"):
             return await event.respond(
-                "Invalid input. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>"
+                "Invalid input. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> <LR>"
             )
         try:
             message = list(message_text.split())
-            if len(message) != 12 or not (
+            if len(message) != 13 or not (
                     message[-3].isnumeric() and message[-2].isnumeric() and message[-1].isnumeric()):
                 return await event.respond(
                     "Invalid input data and be careful about types. Use /add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>"
@@ -199,11 +197,11 @@ async def add_product(event):
         cursor.execute(
             '''INSERT INTO products
                                       (product_name, product_name_fa, part_number, brand, region,
-                                       product_type, car_brand, car_model, price_usd, inventory, is_available)
-                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+                                       product_type, car_brand, car_model, price_usd, inventory, is_available, LR)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
                 message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8],
                 int(message[9]),
-                int(message[10]), int(message[11]))
+                int(message[10]), int(message[11]), int(message[12]))
         )
         conn.commit()
         await event.respond(f"add successfully")
@@ -224,7 +222,10 @@ async def handle_csv(event):
         with tempfile.NamedTemporaryFile() as tmp:
             await event.download_media(tmp.name)
             df = pd.read_csv(tmp.name)
-            df.to_sql('products', conn, if_exists='replace', index=False)
+            cursor.execute("DELETE FROM products")
+            cursor.execute("DELETE FROM SQLITE_SEQUENCE WHERE name='products'")
+            conn.commit()
+            df.to_sql('products', conn, if_exists='append', index=False)
             return await event.respond("Data imported successfully")
     except Exception as e:
         return await event.respond(f"Error handling CSV file: {str(e)}")
@@ -232,7 +233,7 @@ async def handle_csv(event):
 
 @client.on(events.NewMessage(pattern="^/backup$", incoming=True, func=_admin_validator))
 async def backup_handler(event):
-    df = pd.read_sql_query("SELECT * FROM products", conn_log)
+    df = pd.read_sql_query("SELECT * FROM products", conn)
     df.to_csv('data.csv', index=False)
     await client.send_file(event.sender.id, 'data.csv')
     os.remove('data.csv')
@@ -249,24 +250,26 @@ async def log_handler(event):
 @client.on(events.NewMessage(pattern="^/help$", incoming=True, func=_admin_validator))
 async def help_handler(event):
     return await event.respond(
-        "All admin commands are : \n"
-        "All commands need to be exact!\n\n\n"
-        "\b/update_product_value <product_id> <column> <value>  -> to update a product value of specific column \n\n\n"
-        "\b/change_availability <product_id> <new_availability> ->to change availability of specific product fast! \n\n\n"
-        "\b/backup -> send you a backup csv file from your database.\n\n\n"
-        "\b/add_product <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> -> to add single product \n\n\n"
-        "with uploading csv file you can add products to it with order <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available>\n\n\n"
-        "in case of adding be careful about data order and type!\n"
-    )
+"""All admin commands are:
+All commands need to be exact!
+in case of adding be careful about data order and type!
 
+**/log** to receive logger file
 
-def create_or_connect_answer_db(param, columns):
-    pass
+**/update_product_value** <product_id> <column> <value>  -> to update a product value of specific column
+
+**/change_availability** <product_id> <new_availability> ->to change availability of specific product fast!
+
+**/backup** -> send you a backup csv file from your database.
+
+**/add_product** <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> <LR> -> to add single product
+
+with uploading csv file you can add products to it with order <product_name> <product_name_fa> <part_number> <brand> <region> <product_type> <car_brand> <car_model> <price> <inventory> <is_available> <LR>
+""")
 
 
 if __name__ == '__main__':
     conn = PRODUCT_CONN
-    conn_log = LOG_CONN
     cursor = conn.cursor()
     client.start()
     user_client.start()
